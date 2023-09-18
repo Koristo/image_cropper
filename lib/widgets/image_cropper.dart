@@ -16,14 +16,14 @@ class ImageCropper extends StatefulWidget {
 
   @override
   State<StatefulWidget> createState() {
-    return ImageCroperState();
+    return ImageCropperState();
   }
 
 }
 
 //****************************************************************************//
 
-class ImageCroperState extends State<ImageCropper> {
+class ImageCropperState extends State<ImageCropper> {
 
   final _viewWidth  = 200.0;
   final _viewHeight = 300.0;
@@ -34,9 +34,9 @@ class ImageCroperState extends State<ImageCropper> {
   String _imagePath  = '';
   image.Image? _image;
 
-  double _scale      = 0.0;
+  double _scale         = 0.0;
   double _initialScale  = 0.0;
-  Offset _offset     = Offset.zero;
+  Offset _offset        = Offset.zero;
   Offset _initialOffset = Offset.zero;
 
   late double _imgScaledWidth;
@@ -121,14 +121,12 @@ class ImageCroperState extends State<ImageCropper> {
 
   Widget _buildBlurImage() {
     return ClipRRect(
-      child: ImageFiltered( // blured image
+      child: ImageFiltered(
         imageFilter: ui.ImageFilter.blur(
           sigmaX: 15,
           sigmaY: 15,
         ),
         child      : Container(
-          // width: 185,
-          // height: 285,
           child: Image.file(
             File(_imagePath),
             width : _blurScaledWidth,
@@ -143,15 +141,8 @@ class ImageCroperState extends State<ImageCropper> {
   //-------------------------------------------------------------------------//
 
   Widget _buildImage() {
-    // int imageWidth  = (_image != null) ? _image!.width.toInt()  : 0;
-    // int imageHeight = (_image != null) ? _image!.height.toInt() : 0;
-
-    // if ((imageWidth > 0) && (imageHeight > 0)) {
-    // double scale  = _clampScale(_viewWidth, _viewHeight, _imgWidth, _imgHeight, _scale);
-    // Offset offset = _clampOffset(_viewWidth, _viewHeight, _imgWidth, _imgHeight, _offset, scale);
     _imgScaledWidth  = _imgWidth  * _scale;
     _imgScaledHeight = _imgHeight * _scale;
-    //   print("!!!! image moved/scaled: $_imgScaledWidth, $_imgScaledHeight $scale $offset !!!!");
 
     return Positioned(
       left: (_viewWidth  - _imgScaledWidth)  / 2 + _offset.dx,
@@ -216,7 +207,7 @@ class ImageCroperState extends State<ImageCropper> {
         child: Container(
           width     : 12,
           height    : 12,
-          decoration: new BoxDecoration(
+          decoration: BoxDecoration(
             color: StyleColor.blue,
             shape: BoxShape.circle,
           ),
@@ -228,28 +219,92 @@ class ImageCroperState extends State<ImageCropper> {
   //-------------------------------------------------------------------------//
 
   Widget _buildCrop() {
-    return Container(
-      width : _cropWidth,
-      height: _cropHeight,
-      child : Row(
+    return SizedBox(
+      width : _viewWidth,
+      height: _viewHeight,
+      child : Column(
         children: [
-          Column(
+          IgnorePointer(
+            child: Container(
+              width : _viewWidth,
+              height: _topCropAreaHeight,
+              color : borderColor,
+            ),
+          ),
+          Row(
             children: [
-              buildImageDot(true, true, true, true),
-              Spacer(),
-              buildImageDot(true, false, true, false),
+              IgnorePointer(
+                child: Container(
+                  width : _leftCropAreaWidth,
+                  height: _cropHeight,
+                  color : borderColor,
+                ),
+              ),
+              MouseRegion(
+                cursor: SystemMouseCursors.allScroll,
+                child : GestureDetector(
+                  onPanUpdate: (details) {
+                    double newX       = _cropX + details.delta.dx;
+                    double newY       = _cropY + details.delta.dy;
+                    bool   needUpdate = false;
+
+                    if (newX >= 0 && newX <= _viewWidth - _cropWidth) {
+                      needUpdate = true;
+                      _cropX     = newX;
+                    }
+                    if (newY >= 0 && newY <= 300 - _cropHeight) {
+                      needUpdate = true;
+                      _cropY     = newY;
+                    }
+
+                    if (needUpdate) {
+                      setState(() {});
+                    }
+                  },
+                  child   : Container(
+                    width : _cropWidth,
+                    height: _cropHeight,
+                    color : StyleColor.white.withAlpha(0),
+                    child : Row(
+                      children: [
+                        Column(
+                          children: [
+                            buildImageDot(true, true, true, true),
+                            Spacer(),
+                            buildImageDot(true, false, true, false),
+                          ],
+                        ),
+                        Spacer(),
+                        Column(
+                          children: [
+                            buildImageDot(false, true, false, true),
+                            Spacer(),
+                            buildImageDot(false, false, false, false),
+                          ],
+                        ),
+                      ]
+                    )
+                  ),
+                ),
+              ),
+              IgnorePointer(
+                child: Container(
+                  width : _rightCropAreaWidth,
+                  height: _cropHeight,
+                  color : borderColor,
+                ),
+              ),
             ],
           ),
-          Spacer(),
-          Column(
-            children: [
-              buildImageDot(false, true, false, true),
-              Spacer(),
-              buildImageDot(false, false, false, false),
-            ],
+          IgnorePointer(
+            child: Container(
+              width : _viewWidth,
+              height: _bottomCropAreaHeight,
+              color : borderColor,
+            ),
           ),
-        ]
-      )
+        ],
+      ),
     );
   }
 
@@ -258,7 +313,6 @@ class ImageCroperState extends State<ImageCropper> {
   void _loadImage() async {
     ui.Codec? codec;
     ui.Image? img;
-    List<String> allowedTypes = ["jpg", "jpeg", "png"];
 
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image);
@@ -338,27 +392,29 @@ class ImageCroperState extends State<ImageCropper> {
       Offset offset = _clampOffset(width, height, imageWidth, imageHeight, _offset, scale);
 
       final path = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: "Save new image"
+          dialogTitle: "Save new image"
       );
 
-      File? file = await _resizeFile({
-        "image" : _image,
-        "file"   : File('$path/cropped_image.png'),
-        "crop_x" : _cropX.round(),
-        "crop_y" : _cropY.round(),
-        "crop_w" : _cropWidth.round(),
-        "crop_h" : _cropHeight.round(),
-        "image_x": ((_viewWidth  - _imgScaledWidth)  / 2 + offset.dx).round(),
-        "image_y": ((_viewHeight - _imgScaledHeight) / 2 + offset.dy).round(),
-        "image_w": _imgScaledWidth,
-        "image_h": _imgScaledHeight,
-        "view_w" : _viewWidth.toInt(),
-        "view_h" : _viewHeight.toInt(),
-      }
-      );
+      if (path != null) {
+        File? file = await _resizeFile({
+          "image"  : _image,
+          "file"   : File('$path/cropped_image.png'),
+          "crop_x" : _cropX.round(),
+          "crop_y" : _cropY.round(),
+          "crop_w" : _cropWidth.round(),
+          "crop_h" : _cropHeight.round(),
+          "image_x": ((_viewWidth - _imgScaledWidth) / 2 + offset.dx).round(),
+          "image_y": ((_viewHeight - _imgScaledHeight) / 2 + offset.dy).round(),
+          "image_w": _imgScaledWidth,
+          "image_h": _imgScaledHeight,
+          "view_w" : _viewWidth.toInt(),
+          "view_h" : _viewHeight.toInt(),
+        }
+        );
 
-      if (mounted && (file != null)) {
-        print("Successfully saved new image");
+        if (mounted && (file != null)) {
+          print("Successfully saved new image");
+        }
       }
     }
   }
@@ -387,25 +443,25 @@ class ImageCroperState extends State<ImageCropper> {
       print("!!!! original image:[${originalWidth}, ${originalHeight}] view:[$viewW, $viewH] !!!!");
 
       image.Image backgroundImage = image.copyCrop(
-          image.Image.fromBytes(
+        image.Image.fromBytes(
+          viewW,
+          viewH,
+          _gaussianBlur(
+            image.copyResize(
+              paramImage,
+              width : viewW,
+              height: viewH,
+              interpolation: image.Interpolation.nearest, // background is blurred, so using fastest interpolation should be fine
+            ).data,
             viewW,
             viewH,
-            _gaussianBlur(
-              image.copyResize(
-                paramImage,
-                width : viewW,
-                height: viewH,
-                interpolation: image.Interpolation.nearest, // background is blurred, so using fastest interpolation should be fine
-              ).data,
-              viewW,
-              viewH,
-              10,
-            ),
+            10,
           ),
-          cropX,
-          cropY,
-          cropW,
-          cropH
+        ),
+        cropX,
+        cropY,
+        cropW,
+        cropH
       );
 
       int chosenImageAreaX = cropX - imageX;
